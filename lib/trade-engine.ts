@@ -89,10 +89,11 @@ export interface ComponentHealth {
  * Acts as the central coordinator for trade processing across multiple exchanges.
  */
 export class GlobalTradeEngineCoordinator {
-  private engineManagers: Map<string, TradeEngineManager> = new Map()
-  private startingEngines = new Set<string>()  // PHASE 1 FIX: Startup lock to prevent duplicate starts
-  private stoppingEngines = new Set<string>()  // PHASE 2 FIX: Stop lock to prevent race conditions
-  private isGloballyRunning = false
+private engineManagers: Map<string, TradeEngineManager> = new Map()
+   private startingEngines = new Set<string>()  // PHASE 1 FIX: Startup lock to prevent duplicate starts
+   private stoppingEngines = new Set<string>()  // PHASE 2 FIX: Stop lock to prevent race conditions
+   private escalatingEngines = new Set<string>()  // PHASE 3 FIX: Restart lock to prevent concurrent restarts
+   private isGloballyRunning = false
   private isPaused = false
   private healthCheckTimer?: NodeJS.Timeout
   private coordinationMetricsTimer?: NodeJS.Timeout
@@ -1184,10 +1185,9 @@ export class GlobalTradeEngineCoordinator {
    * one is still draining. Without this guard, two concurrent
    * restarts would each acquire-then-break the lock and produce the
    * "doubled progression / stopping-restarting" symptom.
+* private escalatingEngines: Set<string> = new Set()
    */
-  private escalatingEngines: Set<string> = new Set()
-
-  private startGlobalHealthMonitoring(): void {
+    private startGlobalHealthMonitoring(): void {
     if (this.healthCheckTimer) {
       // Already running — keep the existing timer.
       return

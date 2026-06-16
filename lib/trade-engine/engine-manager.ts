@@ -3899,11 +3899,15 @@ export class TradeEngineManager {
    * Redis, so for THOSE this is mostly a cache-bust signal. For
    * settings that ARE held in memory (interval cadence, volume
    * factor, preset toggles) we copy the new values into `startConfig`.
+   *
+   * CRITICAL FIX: Also invalidate symbol cache and re-resolve symbols
+   * when symbol_order or symbol_count changes, so the engine picks up
+   * the new symbol list immediately without requiring a restart.
    */
-  private async applyHotReload(_changedFields: string[]): Promise<void> {
+  private async applyHotReload(changedFields: string[]): Promise<void> {
     this.settingsVersion++
     try {
-      const { getConnection } = await import("@/lib/redis-db")
+      const { getConnection, getRedisClient } = await import("@/lib/redis-db")
       const fresh = await getConnection(this.connectionId)
       if (!fresh) {
         console.warn(
@@ -3934,8 +3938,63 @@ export class TradeEngineManager {
         }
       }
 
+      // CRITICAL FIX: Symbol cache invalidation on symbol settings change.
+      // When symbol_order, symbol_count, or symbols change, invalidate the symbol cache
+      // and re-resolve symbols so the engine picks up the new symbol list.
+      const symbolFieldsTouched = changedFields.some(f =>
+        ["symbol_order", "symbol_count", "symbols"].includes(f)
+      )
+      if (symbolFieldsTouched) {
+        this.invalidateSymbolsCache()
+        console.log(`[v0] [Engine ${this.connectionId}] Symbol cache invalidated after settings change`)
+
+        // Re-read and persist the new symbol list immediately so the UI
+        // and progression state reflect the correct count without waiting.
+        try {
+          const client = getRedisClient()
+          const connSettings = (await client.hgetall(`connection_settings:${this.connectionId}`).catch(() => null)) as Record<string, string> | null
+          const symbolOrder = (connSettings?.symbol_order || "volume_24h").toLowerCase()
+          const symbolCountRaw = connSettings?.symbol_count ? Number(connSettings.symbol_count) : 15
+          const symbolCount = Number.isFinite(symbolCountRaw) && symbolCountRaw > 0
+            ? Math.max(1, Math.min(32, Math.floor(symbolCountRaw)))
+            : 15
+          const manualSymbols = connSettings?.symbols ? (() => { try { return JSON.parse(connSettings.symbols) } catch { return [] } })() : []
+
+          let resolvedSymbols: string[] = []
+          if (symbolOrder === "manual" && Array.isArray(manualSymbols) && manualSymbols.length > 0) {
+            resolvedSymbols = manualSymbols.slice(0, symbolCount)
+          } else {
+            // Auto-resolve top-N symbols
+            const exchange = String((fresh as any).exchange || "bingx").toLowerCase()
+            const { normaliseSort, fetchTopSymbols } = await import("@/lib/top-symbols")
+            const sort = normaliseSort(symbolOrder)
+            const top = await fetchTopSymbols(exchange, symbolCount, sort)
+            resolvedSymbols = top.symbols?.map((s: any) => s.symbol).filter((s: any) => typeof s === "string") || []
+          }
+
+          if (resolvedSymbols.length > 0) {
+            // Write the resolved symbols to trade_engine_state for engine to read
+            const stateKey = `trade_engine_state:${this.connectionId}`
+            const prevState = (await getSettings(stateKey)) || {}
+            await setSettings(stateKey, {
+              ...prevState,
+              symbols: JSON.stringify(resolvedSymbols),
+              active_symbols: JSON.stringify(resolvedSymbols),
+              config_set_symbols_total: resolvedSymbols.length,
+              symbol_order: symbolOrder,
+              symbol_count: String(symbolCount),
+              updated_at: new Date().toISOString(),
+            })
+            console.log(`[v0] [Engine ${this.connectionId}] Resolved ${resolvedSymbols.length} symbols after settings change: ${resolvedSymbols.join(", ")}`)
+          }
+        } catch (symErr) {
+          console.warn(`[v0] [Engine ${this.connectionId}] Symbol refresh on hot-reload failed:`, symErr instanceof Error ? symErr.message : String(symErr))
+        }
+      }
+
       // Best-effort: tell any subscribed processors to refresh. The
       // pseudo-position manager + config-set processor already re-read
+      // fresh per cycle, so this is informational, but we still log
       // fresh per cycle, so this is informational, but we still log
       // it for operator visibility.
       console.log(

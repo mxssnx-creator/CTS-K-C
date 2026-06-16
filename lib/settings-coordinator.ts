@@ -13,14 +13,15 @@ import { initRedis, getSettings, setSettings, getConnection, getRedisClient } fr
 // Fields that require a full engine restart when changed
 const RESTART_REQUIRED_FIELDS = [
   "api_key", "api_secret", "exchange", "is_testnet",
-  "api_type", "api_subtype", "is_enabled",
+  "api_type", "api_subtype", "is_enabled", "connection_method",
+  "is_live_trade", "is_preset_trade", "is_testnet",
 ]
 
 // Fields that can be hot-reloaded without restart
 const HOT_RELOAD_FIELDS = [
   "name", "volume_factor", "margin_type", "position_mode",
   "connection_settings", "strategies", "indications",
-  "active_indications", "preset_type",
+  "active_indications", "preset_type", "symbol_order", "symbol_count", "symbols",
 ]
 
 export type ChangeType = "restart" | "reload" | "cosmetic"
