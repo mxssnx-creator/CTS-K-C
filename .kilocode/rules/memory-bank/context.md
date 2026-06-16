@@ -8,11 +8,10 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 
 ## Recently Completed
 
-- [x] Load complete CTS-V-A-px codebase from codex branch
-- [x] Copy all application files (app, components, lib, hooks, styles)
-- [x] Add configuration files (next.config.mjs, tailwind.config.js, etc.)
-- [x] Include documentation and test scripts
-- [x] Push all changes to CTS-K-C main branch
+- [x] Fix missing escalateEngines property in GlobalTradeEngineCoordinator
+- [x] Add symbol_order/symbol_count/symbols to hot-reload fields
+- [x] Fix applyHotReload to invalidate symbol cache and re-resolve symbols when settings change
+- [x] Push fixes to CTS-K-C main branch
 
 ## Current Structure
 
