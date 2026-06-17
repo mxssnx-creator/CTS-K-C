@@ -3946,23 +3946,20 @@ export class TradeEngineManager {
         this.invalidateSymbolsCache()
         console.log(`[v0] [Engine ${this.connectionId}] Symbol cache invalidated after settings change`)
 
-        // Re-read and persist the new symbol list immediately so the UI
-        // and progression state reflect the correct count without waiting.
         try {
           const client = getRedisClient()
-          const connSettings = (await client.hgetall(`connection_settings:${this.connectionId}`).catch(() => null)) as Record<string, string> | null
-          const symbolOrder = (connSettings?.symbol_order || "volume_24h").toLowerCase()
-          const symbolCountRaw = connSettings?.symbol_count ? Number(connSettings.symbol_count) : 15
+          const connData = (await client.hgetall(`connection:${this.connectionId}`).catch(() => null)) as Record<string, string> | null
+          const symbolOrder = (connData?.symbol_order || "volume_24h").toLowerCase()
+          const symbolCountRaw = connData?.symbol_count ? Number(connData.symbol_count) : 15
           const symbolCount = Number.isFinite(symbolCountRaw) && symbolCountRaw > 0
             ? Math.max(1, Math.min(32, Math.floor(symbolCountRaw)))
             : 15
-          const manualSymbols = connSettings?.symbols ? (() => { try { return JSON.parse(connSettings.symbols) } catch { return [] } })() : []
+          const manualSymbols = connData?.symbols ? (() => { try { return JSON.parse(connData.symbols) } catch { return [] } })() : []
 
           let resolvedSymbols: string[] = []
           if (symbolOrder === "manual" && Array.isArray(manualSymbols) && manualSymbols.length > 0) {
             resolvedSymbols = manualSymbols.slice(0, symbolCount)
           } else {
-            // Auto-resolve top-N symbols
             const exchange = String((fresh as any).exchange || "bingx").toLowerCase()
             const { normaliseSort, fetchTopSymbols } = await import("@/lib/top-symbols")
             const sort = normaliseSort(symbolOrder)
@@ -3971,13 +3968,13 @@ export class TradeEngineManager {
           }
 
           if (resolvedSymbols.length > 0) {
-            // Write the resolved symbols to trade_engine_state for engine to read
             const stateKey = `trade_engine_state:${this.connectionId}`
             const prevState = (await getSettings(stateKey)) || {}
             await setSettings(stateKey, {
               ...prevState,
               symbols: JSON.stringify(resolvedSymbols),
               active_symbols: JSON.stringify(resolvedSymbols),
+              engine_type: this.startConfig?.engine_type || "main",
               config_set_symbols_total: resolvedSymbols.length,
               symbol_order: symbolOrder,
               symbol_count: String(symbolCount),
