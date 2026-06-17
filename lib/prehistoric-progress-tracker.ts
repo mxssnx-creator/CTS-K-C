@@ -15,7 +15,7 @@ export interface PrehistoricProgress {
   completedSymbols: string[]
   errorSymbols: { symbol: string; error: string }[]
   totalCandles: number
-  totalCandesProcessed: number
+  totalCandlesProcessed: number
   startTime: number
   estimatedTimeRemaining: number // ms
   isComplete: boolean
@@ -185,7 +185,7 @@ export class PrehistoricProgressTracker {
       completedSymbols: [],
       errorSymbols: [],
       totalCandles: 0,
-      totalCandesProcessed: 0,
+      totalCandlesProcessed: 0,
       startTime: now,
       estimatedTimeRemaining: 0,
       isComplete: false,
@@ -244,7 +244,7 @@ export class PrehistoricProgressTracker {
         completedSymbols: completed,
         errorSymbols: errors,
         totalCandles,
-        totalCandesProcessed: processed > 0 ? Math.round(totalCandles / processed) * processed : 0,
+        totalCandlesProcessed: processed > 0 ? Math.round(totalCandles / processed) * processed : 0,
         startTime,
         estimatedTimeRemaining: Math.round(estimatedTimeRemaining),
         isComplete,

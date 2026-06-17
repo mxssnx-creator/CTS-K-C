@@ -82,4 +82,5 @@ export async function GET() {
 | 2026-06-17 | Fixed `scripts/validate-comprehensive.mjs` realtime test to use setsCreated and ordersPlaced instead of cycle counters |
 | 2026-06-17 | Ran 15-minute continuous test with 20 symbols - stable progression verified |
 | 2026-06-17 | Progression test passed: 4/5 tests pass, 1 skipped (position history) |
+| 2026-06-17 | Fixed typo in PrehistoricProgress interface: totalCandesProcessed → totalCandlesProcessed |
 | Initial | Template created with base setup |
