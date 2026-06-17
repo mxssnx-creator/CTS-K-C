@@ -2,7 +2,7 @@
  * ╔═════════════════════════════════════════════════════════════════════════╗
  * ║              PROGRESSION STATE — REDIS SCHEMA (CANONICAL)              ║
  * ║                                                                         ║
- * ║  Hash key:                       progression:{connectionId}            ║
+ * ║  Hash key:                       progression:{connectionId}:{engineType}  ║
  * ║  Sibling string keys (per-stage Set fan-out, 24h TTL):                 ║
  * ║      strategies:{id}:base:count        strategies:{id}:base:evaluated  ║
  * ║      strategies:{id}:main:count        strategies:{id}:main:evaluated  ║
