@@ -567,11 +567,13 @@ const settings = await loadSettingsAsync()
       for (const connection of validConnections) {
         try {
           const config: EngineConfig = {
-            connectionId: connection.id,
-            indicationInterval: settings.mainEngineIntervalMs ? settings.mainEngineIntervalMs / 1000 : 5,
-            strategyInterval: settings.strategyUpdateIntervalMs ? settings.strategyUpdateIntervalMs / 1000 : 10,
-            realtimeInterval: settings.realtimeIntervalMs ? settings.realtimeIntervalMs / 1000 : 0.3,
-          }
+          connectionId: connection.id,
+          exchange: connection.exchange,
+          engine_type: (connection.engine_type as string) || "main",
+          indicationInterval: settings.mainEngineIntervalMs ? settings.mainEngineIntervalMs / 1000 : 5,
+          strategyInterval: settings.strategyUpdateIntervalMs ? settings.strategyUpdateIntervalMs / 1000 : 10,
+          realtimeInterval: settings.realtimeIntervalMs ? settings.realtimeIntervalMs / 1000 : 0.3,
+        }
           
           await this.startEngine(connection.id, config)
           successCount++
@@ -1027,8 +1029,11 @@ const settings = await loadSettingsAsync()
           
           // Only restart if it was running before pause, OR if we have no snapshot (first time)
           if (wasRunningBeforePause !== false) {
+            const connectionState = (await (await import("@/lib/redis-db")).getSettings(`trade_engine_state:${connectionId}`)) || {}
             const config: EngineConfig = {
               connectionId,
+              exchange: connection.exchange,
+              engine_type: (connectionState as any)?.engine_type || "main",
               indicationInterval: settings.mainEngineIntervalMs ? settings.mainEngineIntervalMs / 1000 : 5,
               strategyInterval: settings.strategyUpdateIntervalMs ? settings.strategyUpdateIntervalMs / 1000 : 10,
               realtimeInterval: settings.realtimeIntervalMs ? settings.realtimeIntervalMs / 1000 : 0.3,
