@@ -17,6 +17,7 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 - [x] Increase Vercel API function memory from 4096MB to 10240MB for 12-symbol progression tests
 - [x] Fix `scripts/validate-comprehensive.mjs` - correct URL construction for API_BASE
 - [x] Fix `scripts/validate-comprehensive.mjs` - update field names to match actual API response format
+- [x] Fix `scripts/validate-comprehensive.mjs` - use ordersPlaced and setsCreated for realtime progression verification
 
 ## Current Focus
 
@@ -78,5 +79,7 @@ export async function GET() {
 | 2026-06-17 | Fixed `/api/trade-engine/restart/route.ts` - replaced uninitialized local `globalTradeEngine` variable with coordinator singleton |
 | 2026-06-17 | Increased memory settings: package.json dev/build/start from 4096MB to 24576MB; Vercel API functions from 4096MB to 10240MB |
 | 2026-06-17 | Fixed `scripts/validate-comprehensive.mjs` URL construction and field names for progression testing |
-| 2026-06-17 | Progression test passed: 4/5 tests pass, 1 skipped (position history not available on fresh connection) |
+| 2026-06-17 | Fixed `scripts/validate-comprehensive.mjs` realtime test to use setsCreated and ordersPlaced instead of cycle counters |
+| 2026-06-17 | Ran 15-minute continuous test with 20 symbols - stable progression verified |
+| 2026-06-17 | Progression test passed: 4/5 tests pass, 1 skipped (position history) |
 | Initial | Template created with base setup |
