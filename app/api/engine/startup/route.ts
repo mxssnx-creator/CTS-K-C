@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { TradeEngineManager } from "@/lib/trade-engine/engine-manager"
+import { TradeEngineManager, type EngineConfig } from "@/lib/trade-engine/engine-manager"
 import { getSettings, setSettings, initRedis } from "@/lib/redis-db"
 import { loadMarketDataForEngine } from "@/lib/market-data-loader"
 
@@ -29,8 +29,9 @@ export async function POST(request: NextRequest) {
 
     // Start the engine
     console.log("[v0] [API] Starting trade engine with market data loaded...")
-    const config = {
+    const config: EngineConfig = {
       connectionId: "global",
+      engine_type: "main",
       indicationInterval: 5, // 5 seconds
       strategyInterval: 10, // 10 seconds
       realtimeInterval: 0.3,

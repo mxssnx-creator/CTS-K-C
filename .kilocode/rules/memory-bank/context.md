@@ -25,6 +25,7 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 - [x] **FIX: engine_type in trade_engine_state**: Added `engine_type` field to `setSettings('trade_engine_state:${connectionId}', {...})` in engine-manager.ts:604-612 - this was MISSING and caused prehistoric progression to default to "main" engine type
 - [x] **FIX: applyHotReload symbol resolution**: Fixed wrong key names in applyHotReload - use `connection:` prefix instead of `connection_settings:`, and don't double-prefix with `settings:` when calling getSettings
 - [x] **FIX: prehistoric progression startup**: Added immediate `setTimeout(tick, 0)` call in `startPrehistoricProgression` so the loop starts right away instead of waiting for the first scheduleNext
+- [x] **FIX: engine_type propagation**: Added engine_type to all engine config creation paths (startEngineFromConnectionConfig, startAll, resume)
 
 ## Current Focus
 
