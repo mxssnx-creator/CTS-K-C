@@ -202,7 +202,16 @@ export class ConfigSetProcessor {
       })
     } catch { /* non-critical */ }
 
-    const progressKey = `progression:${this.connectionId}`
+    // Read engine_type from trade_engine_state to ensure unique progression per engine type
+    let progressKey: string
+    try {
+      const { getSettings } = await import("@/lib/redis-db")
+      const engineState = (await getSettings(`trade_engine_state:${this.connectionId}`)) || {}
+      const engineType = (engineState as any)?.engine_type || "main"
+      progressKey = `progression:${this.connectionId}:${engineType}`
+    } catch {
+      progressKey = `progression:${this.connectionId}:main`
+    }
 
     // Worker that processes a single symbol end-to-end. All DB writes inside
     // are fired with Promise.all where possible to minimise the await chain.

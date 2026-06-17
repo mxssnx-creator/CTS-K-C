@@ -298,7 +298,10 @@ export class RealtimeProcessor {
       // can verify Phase 2 is firing inside each shared-pipeline cycle.
       try {
         const client = getRedisClient()
-        const progKey = `progression:${this.connectionId}`
+        const { getSettings } = await import("@/lib/redis-db")
+        const engineState = (await getSettings(`trade_engine_state:${this.connectionId}`)) || {}
+        const engineType = (engineState as any)?.engine_type || "main"
+        const progKey = `progression:${this.connectionId}:${engineType}`
         await Promise.all([
           client.hincrby(progKey, "pseudo_positions_updated_count", positions.length),
           client.hincrby(progKey, "pseudo_positions_update_cycles", 1),

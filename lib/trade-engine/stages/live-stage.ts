@@ -164,15 +164,19 @@ async function savePosition(position: LivePosition): Promise<void> {
   await redisSave(position as any)
 }
 async function incrementMetric(connectionId: string, metric: string, delta: number = 1): Promise<void> {
-  const { getRedisClient } = await import("@/lib/redis-db")
+  const { getRedisClient, getSettings } = await import("@/lib/redis-db")
   const client = getRedisClient()
   try {
+    // Read engine_type from trade_engine_state to ensure unique progression per engine type
+    const engineState = (await getSettings(`trade_engine_state:${connectionId}`)) || {}
+    const engineType = (engineState as any)?.engine_type || "main"
+    const key = `progression:${connectionId}:${engineType}`
+    
     // Use hincrby for atomic counters; delta may be negative for decrements
     if (typeof (client as any).hincrby === "function") {
-      await (client as any).hincrby(`progression:${connectionId}`, metric, delta)
+      await (client as any).hincrby(key, metric, delta)
     } else {
       // Fallback for adapters without hincrby: read-modify-write (best-effort)
-      const key = `progression:${connectionId}`
       const hash = (await client.hgetall(key).catch(() => ({} as Record<string, string>))) || {}
       const current = parseInt(String(hash[metric] || "0"), 10) || 0
       await client.hset(key, { [metric]: String(current + delta) })
