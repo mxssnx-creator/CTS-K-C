@@ -3296,6 +3296,7 @@ export class TradeEngineManager {
           err instanceof Error ? err.message : String(err),
         )
       } finally {
+        cycleCount++
         scheduleNext()
       }
     }
