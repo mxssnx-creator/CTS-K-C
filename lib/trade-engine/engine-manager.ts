@@ -568,7 +568,7 @@ export class TradeEngineManager {
       // If mismatch → previous running progress is stopped (via archive) and we start a fresh,
       // unique, solid progression for the *actual* current configuration of this connection.
       try {
-        await ProgressionStateManager.recoordinateForActualOne(this.connectionId)
+        await ProgressionStateManager.recoordinateForActualOne(this.connectionId, this.startConfig?.engine_type)
       } catch (recoordErr) {
         console.warn("[v0] [Engine] Re-coordination check failed (continuing):", recoordErr)
       }
@@ -580,16 +580,16 @@ export class TradeEngineManager {
       // - Page refreshes / independent opens attach to the current unique one (no explosion of instances).
       // "Just Unique" — one canonical active progression for the actual state.
       try {
-        const u = await ProgressionStateManager.ensureJustUniqueProgression(this.connectionId)
+        const u = await ProgressionStateManager.ensureJustUniqueProgression(this.connectionId, this.startConfig?.engine_type)
         this.epoch = u.epoch
         console.log(
           `[v0] [Engine] Using ${u.wasNew ? "new" : "existing"} unique progression ` +
-          `for ${this.connectionId} (session=${u.sessionNumber}, epoch=${u.epoch})`
+          `for ${this.connectionId}:${this.startConfig?.engine_type} (session=${u.sessionNumber}, epoch=${u.epoch})`
         )
       } catch (ensureErr) {
         console.warn("[v0] [Engine] ensureJustUniqueProgression failed, falling back to archive:", ensureErr)
         this.epoch = this.lockHandle?.epoch ?? Date.now()
-        await ProgressionStateManager.archiveAndStartNewProgression(this.connectionId, this.epoch).catch(() => {})
+        await ProgressionStateManager.archiveAndStartNewProgression(this.connectionId, this.epoch, this.startConfig?.engine_type).catch(() => {})
       }
 
       // Initialize engine state
@@ -629,10 +629,11 @@ export class TradeEngineManager {
           is_preset_trade: connData.is_preset_trade || "0",
           live_volume_factor: connData.live_volume_factor || "1",
           connection_method: connData.connection_method || "library",
+          engine_type: this.startConfig?.engine_type || "main",
           updated_at: new Date().toISOString(),
         }
 
-        await redisClient.hset(`progression:${this.connectionId}`, {
+        await redisClient.hset(`progression:${this.connectionId}:${this.startConfig?.engine_type || "main"}`, {
           symbol_count: String(symbolCount),
           active_symbols_hash: symbolsHash,
           started_for_settings_version: new Date().toISOString(),
@@ -640,7 +641,7 @@ export class TradeEngineManager {
         }).catch(() => {})
 
         console.log(
-          `[v0] [Engine] Progression solidified for ${this.connectionId}: ` +
+          `[v0] [Engine] Progression solidified for ${this.connectionId}:${this.startConfig?.engine_type}: ` +
           `symbols=${symbolCount}, hash=${symbolsHash.slice(0, 16)}... (epoch=${this.epoch})`
         )
       } catch (snapErr) {
@@ -3997,6 +3998,18 @@ export class TradeEngineManager {
       // fresh per cycle, so this is informational, but we still log
       // fresh per cycle, so this is informational, but we still log
       // it for operator visibility.
+      
+      // CRITICAL: Re-coordinate progression instantly after settings change
+      // to ensure unique, solid progress per connection+engine_type
+      if (symbolFieldsTouched || changedFields.some(f => ["is_live_trade", "is_preset_trade", "is_testnet", "margin_type", "position_mode", "connection_method"].includes(f))) {
+        try {
+          await ProgressionStateManager.recoordinateForActualOne(this.connectionId, this.startConfig?.engine_type)
+          console.log(`[v0] [Engine ${this.connectionId}] Progression re-coordinated after settings change`)
+        } catch (recoordErr) {
+          console.warn(`[v0] [Engine ${this.connectionId}] Failed to re-coordinate progression:`, recoordErr)
+        }
+      }
+
       console.log(
         `[v0] [Engine ${this.connectionId}] hot-reload applied (settingsVersion=${this.settingsVersion}, volume_factor=${(fresh as any).volume_factor})`,
       )

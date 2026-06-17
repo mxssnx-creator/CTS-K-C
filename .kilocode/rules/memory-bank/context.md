@@ -18,6 +18,9 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 - [x] Fix `scripts/validate-comprehensive.mjs` - correct URL construction for API_BASE
 - [x] Fix `scripts/validate-comprehensive.mjs` - update field names to match actual API response format
 - [x] Fix `scripts/validate-comprehensive.mjs` - use ordersPlaced and setsCreated for realtime progression verification
+- [x] **Unique Progress Per Engine Type**: Modified progression key from `progression:{connectionId}` to `progression:{connectionId}:{engineType}` to ensure unique, solid progress per connection AND engine type (main, live, preset)
+- [x] **Engine Type in Fingerprint**: Added `engine_type` to settings fingerprint comparison in `recoordinateForActualOne` to detect engine type changes
+- [x] **Instant Re-coordination**: Added call to `ProgressionStateManager.recoordinateForActualOne()` in `applyHotReload` to re-coordinate progression instantly after settings changes (including symbol list changes, mode flags)
 
 ## Current Focus
 

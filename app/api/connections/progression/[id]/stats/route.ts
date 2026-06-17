@@ -123,6 +123,10 @@ export async function GET(
   const mainLogic = async () => {
     try {
       const { id: connectionId } = await params
+      
+      // Get engine_type from query params, default to "main"
+      const searchParams = request.nextUrl.searchParams
+      const engineType = searchParams.get('engine_type') || "main"
 
       await initRedis()
       const client = getRedisClient()
@@ -147,7 +151,7 @@ export async function GET(
       strategyDetailMainHashRaw,
       strategyDetailRealHashRaw,
     ] = await Promise.all([
-      client.hgetall(`progression:${connectionId}`).catch(() => null),
+      client.hgetall(`progression:${connectionId}:${engineType}`).catch(() => null),
       client.hgetall(`prehistoric:${connectionId}`).catch(() => null),
       client.hgetall(`realtime:${connectionId}`).catch(() => null),
       getSettings(`trade_engine_state:${connectionId}`).catch(() => ({})),

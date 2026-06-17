@@ -174,7 +174,7 @@ export class ProgressionStateManager {
   /**
    * Get current progression state for a connection
    */
-  static async getProgressionState(connectionId: string): Promise<ProgressionState> {
+  static async getProgressionState(connectionId: string, engineType: string = "main"): Promise<ProgressionState> {
     try {
       // PRODUCTION FIX: Always initialize Redis connection before using it
       await initRedis()
@@ -184,7 +184,7 @@ export class ProgressionStateManager {
         return this.getDefaultState(connectionId)
       }
 
-      const key = `progression:${connectionId}`
+      const key = `progression:${connectionId}:${engineType}`
       let data: Record<string, string> = {}
       
       try {
@@ -261,7 +261,7 @@ return {
    * Get default progression state (reusable helper)
    * Public static method to allow callers to get default state on errors
    */
-  static getDefaultState(connectionId: string): ProgressionState {
+  static getDefaultState(connectionId: string, engineType: string = "main"): ProgressionState {
     return {
       connectionId,
       cyclesCompleted: 0,
@@ -316,7 +316,7 @@ return {
    */
   private static cycleCounters: Map<string, { completed: number; successful: number; failed: number }> = new Map()
 
-  static async incrementCycle(connectionId: string, successful: boolean, profit: number = 0): Promise<void> {
+  static async incrementCycle(connectionId: string, successful: boolean, profit: number = 0, engineType: string = "main"): Promise<void> {
     try {
       const client = getRedisClient()
       if (!client) {
@@ -328,7 +328,7 @@ return {
         return
       }
 
-      const redisKey = `progression:${connectionId}`
+      const redisKey = `progression:${connectionId}:${engineType}`
 
       // CRITICAL FIX: use atomic hincrby instead of read-modify-write hset.
       // Three processors (indication/strategy/realtime) call incrementCycle
@@ -344,7 +344,7 @@ return {
         // the local in-process mirror which is updated below. This cuts
         // the Redis fan-out from 3 ops to 2 ops per incrementCycle call,
         // eliminating one round-trip per productive cycle tick.
-        const prev = this.cycleCounters.get(connectionId) ?? { completed: 0, successful: 0, failed: 0 }
+        const prev = this.cycleCounters.get(`${connectionId}:${engineType}`) ?? { completed: 0, successful: 0, failed: 0 }
         if (successful) {
           const [completed, successCount] = await Promise.all([
             client.hincrby(redisKey, "cycles_completed", 1),
@@ -368,7 +368,7 @@ return {
       }
 
       // Update local counter for tracking (best-effort mirror; not authoritative)
-      this.cycleCounters.set(connectionId, {
+      this.cycleCounters.set(`${connectionId}:${engineType}`, {
         completed: newCompleted,
         successful: newSuccessful,
         failed: newFailed,
@@ -413,7 +413,7 @@ return {
   /**
    * Track prehistoric phase progress (separate from realtime)
    */
-  static async incrementPrehistoricCycle(connectionId: string, symbol: string): Promise<void> {
+  static async incrementPrehistoricCycle(connectionId: string, symbol: string, engineType: string = "main"): Promise<void> {
     try {
       if (!getRedisClient()) {
         await initRedis()
@@ -423,7 +423,7 @@ return {
         console.warn(`[v0] Redis client not available for incrementPrehistoricCycle`)
         return
       }
-      const key = `progression:${connectionId}`
+      const key = `progression:${connectionId}:${engineType}`
 
       // PERFORMANCE: The previous implementation called `getProgressionState`
       // which does a full `hgetall` + JSON parse on every call — expensive
@@ -471,7 +471,7 @@ return {
    * `symbolTotal` (the connection's configured symbol count) to stamp the
    * authoritative final counts.
    */
-  static async completePrehistoricPhase(connectionId: string, symbolTotal?: number): Promise<void> {
+  static async completePrehistoricPhase(connectionId: string, symbolTotal?: number, engineType: string = "main"): Promise<void> {
     try {
       // Ensure Redis is initialised BEFORE using the client.
       // getRedisClient() returns null on cold-boot; binding `client` first then
@@ -483,7 +483,7 @@ return {
         await initRedis()
         client = getRedisClient()!
       }
-      const key = `progression:${connectionId}`
+      const key = `progression:${connectionId}:${engineType}`
 
       await client.hset(key, {
         prehistoric_phase_active: "false",
@@ -541,7 +541,7 @@ return {
    * adapter this call falls through to `hincrby` (which rejects non-integer
    * deltas); we detect that path and fall back to a safe snapshot update.
    */
-  static async recordTrade(connectionId: string, successful: boolean, profit: number = 0): Promise<void> {
+  static async recordTrade(connectionId: string, successful: boolean, profit: number = 0, engineType: string = "main"): Promise<void> {
     try {
       const client = getRedisClient()
       if (!client) {
@@ -552,7 +552,7 @@ return {
         console.warn(`[v0] Redis client not available for recordTrade`)
         return
       }
-      const key = `progression:${connectionId}`
+      const key = `progression:${connectionId}:${engineType}`
 
       // Atomic counter increments. Kick off both counters concurrently — hincrby
       // returns the post-increment value so we can derive the success rate from
@@ -632,7 +632,7 @@ return {
   /**
    * Reset progression state (useful for testing or manual reset)
    */
-  static async resetProgressionState(connectionId: string): Promise<void> {
+  static async resetProgressionState(connectionId: string, engineType: string = "main"): Promise<void> {
     try {
       if (!getRedisClient()) {
         await initRedis()
@@ -642,9 +642,9 @@ return {
         console.warn(`[v0] Redis client not available for resetProgressionState`)
         return
       }
-      const key = `progression:${connectionId}`
+      const key = `progression:${connectionId}:${engineType}`
       await client.del(key)
-      console.log(`[v0] [Progression] State reset for ${connectionId}`)
+      console.log(`[v0] [Progression] State reset for ${connectionId}:${engineType}`)
     } catch (error) {
       console.error(`[v0] Failed to reset progression state for ${connectionId}:`, error)
     }
@@ -664,7 +664,7 @@ return {
    *                      Pass 0 to skip the epoch guard (operator-driven
    *                      reset from the admin panel).
    */
-  static async endProgression(connectionId: string, epoch = 0): Promise<void> {
+  static async endProgression(connectionId: string, epoch = 0, engineType: string = "main"): Promise<void> {
     try {
       if (!getRedisClient()) {
         await initRedis()
@@ -674,7 +674,7 @@ return {
         console.warn(`[v0] Redis client not available for endProgression`)
         return
       }
-      const key = `progression:${connectionId}`
+      const key = `progression:${connectionId}:${engineType}`
       const now = Date.now()
 
       // Epoch guard: if the hash already carries a newer epoch we are a
@@ -694,7 +694,7 @@ return {
         engine_started: "false",
         last_update: new Date(now).toISOString(),
       })
-      console.log(`[v0] [Progression] Ended progression for ${connectionId} at epoch ${epoch}`)
+      console.log(`[v0] [Progression] Ended progression for ${connectionId}:${engineType} at epoch ${epoch}`)
     } catch (error) {
       console.error(`[v0] Failed to end progression for ${connectionId}:`, error)
     }
@@ -721,6 +721,7 @@ return {
   static async archiveAndStartNewProgression(
     connectionId: string,
     newEpoch: number,
+    engineType: string = "main",
   ): Promise<number> {
     // CRITICAL: init first, then fetch the live client — the old pattern bound
     // `client` before initRedis() ran, so the first call on a cold boot used null.
@@ -732,7 +733,7 @@ return {
       console.warn(`[v0] Redis client not available for archiveAndStartNewProgression — returning session 1`)
       return 1
     }
-    const key = `progression:${connectionId}`
+    const key = `progression:${connectionId}:${engineType}`
     const now = Date.now()
 
     try {
@@ -755,7 +756,7 @@ return {
         // Re-read so the snapshot includes the ended_at we just wrote.
         const snapshot = await client.hgetall(key).catch(() => existing)
         const oldEpoch = existing.epoch || String(newEpoch - 1)
-        const historyKey = `progression:${connectionId}:history:${oldEpoch}`
+        const historyKey = `progression:${connectionId}:history:${engineType}:${oldEpoch}`
         if (snapshot && Object.keys(snapshot).length > 0) {
           // Pipeline: write history hash + set its TTL atomically.
           // 7-day TTL — enough for a weekly review without bloating Redis.
@@ -777,7 +778,7 @@ return {
         // ── Step 4: delete old hash so we start fully clean ───────────
         await client.del(key)
         console.log(
-          `[v0] [Progression] Archived old progression for ${connectionId} (oldEpoch=${oldEpoch}) → ${historyKey}`,
+          `[v0] [Progression] Archived old progression for ${connectionId}:${engineType} (oldEpoch=${oldEpoch}) → ${historyKey}`,
         )
       }
 
@@ -838,10 +839,11 @@ return {
         active_symbols_hash: "",
         started_for_settings_version: "",
         progress_settings_snapshot: "{}",
+        engine_type: engineType,
       })
 
       console.log(
-        `[v0] [Progression] Started new progression for ${connectionId} (session=${sessionNumber}, epoch=${newEpoch})`,
+        `[v0] [Progression] Started new progression for ${connectionId}:${engineType} (session=${sessionNumber}, epoch=${newEpoch})`,
       )
       return sessionNumber
     } catch (error) {
@@ -861,13 +863,13 @@ return {
    * Guarantees: previous progress is stopped (via archive + epoch bump), new one is
    * solid for the actual current configuration.
    */
-  static async recoordinateForActualOne(connectionId: string): Promise<void> {
+  static async recoordinateForActualOne(connectionId: string, engineType: string = "main"): Promise<void> {
     try {
       await initRedis()
       const client = getRedisClient()
       if (!client) return
 
-      const key = `progression:${connectionId}`
+      const key = `progression:${connectionId}:${engineType}`
       const existing = await client.hgetall(key).catch(() => null)
       if (!existing || Object.keys(existing).length === 0) {
         // No active progression yet — initialise a fresh one so the engine
@@ -876,7 +878,7 @@ return {
         // bug where the engine saw no progression and returned early without
         // beginning the prehistoric phase.
         const epoch = Date.now()
-        await this.archiveAndStartNewProgression(connectionId, epoch)
+        await this.archiveAndStartNewProgression(connectionId, epoch, engineType)
         return
       }
 
@@ -939,6 +941,7 @@ return {
         connData.connection_method || "library",
         connData.margin_type     || "cross",
         connData.position_mode   || "hedge",
+        engineType,
       ].join(":")
 
       // The stored snapshot is a JSON blob; parse it gracefully.
@@ -954,6 +957,7 @@ return {
           snap.connection_method || "library",
           snap.margin_type     || "cross",
           snap.position_mode   || "hedge",
+          snap.engine_type || "main",
         ].join(":")
       } catch { /* treat missing snapshot as a mismatch */ }
 
@@ -966,6 +970,7 @@ return {
         connection_method: connData.connection_method || "library",
         margin_type: connData.margin_type || "cross",
         position_mode: connData.position_mode || "hedge",
+        engine_type: engineType,
         updated_at: new Date().toISOString(),
       }
 
@@ -983,13 +988,13 @@ return {
           ? `symbols changed (stored=${storedSymbolCount} vs live=${liveSymbolCount})`
           : `settings changed (stored="${storedFingerprint}" vs live="${liveFingerprint}")`
         console.log(
-          `[v0] [Progression] Re-coordination needed for ${connectionId}: ${reason}. ` +
+          `[v0] [Progression] Re-coordination needed for ${connectionId}:${engineType}: ${reason}. ` +
           `Stopping previous progress and starting fresh for actual state.`,
         )
 
         // Force archive + new start (this stops previous via the archive logic + new epoch)
         const newEpoch = Date.now()
-        await this.archiveAndStartNewProgression(connectionId, newEpoch)
+        await this.archiveAndStartNewProgression(connectionId, newEpoch, engineType)
 
         // Clear the prehistoric gate flags so the engine re-runs the full
         // historic processing for the new symbol set / config. Without this
@@ -1030,21 +1035,22 @@ return {
    * No concurrent multiple progressions/instances for the same connection.
    */
   static async ensureJustUniqueProgression(
-    connectionId: string
+    connectionId: string,
+    engineType: string = "main"
   ): Promise<{ sessionNumber: number; epoch: number; wasNew: boolean }> {
     try {
       await initRedis()
       const client = getRedisClient()
       if (!client) {
         const epoch = Date.now()
-        const session = await this.archiveAndStartNewProgression(connectionId, epoch)
+        const session = await this.archiveAndStartNewProgression(connectionId, epoch, engineType)
         return { sessionNumber: session, epoch, wasNew: true }
       }
 
       // First, make sure we are coordinated to actual current state
-      await this.recoordinateForActualOne(connectionId)
+      await this.recoordinateForActualOne(connectionId, engineType)
 
-      const key = `progression:${connectionId}`
+      const key = `progression:${connectionId}:${engineType}`
       const existing = await client.hgetall(key).catch(() => null)
 
       const now = Date.now()
@@ -1088,7 +1094,7 @@ return {
           await client.expire(key, 7 * 24 * 60 * 60).catch(() => {})
 
           console.log(
-            `[v0] [Progression] Attached to existing unique progression for ${connectionId} ` +
+            `[v0] [Progression] Attached to existing unique progression for ${connectionId}:${engineType} ` +
             `(session=${sessionNumber}, epoch=${epoch}, age=${Math.round(sessionAge / 1000)}s)`,
           )
 
@@ -1097,14 +1103,14 @@ return {
 
         // Session is stale — treat as dead and start fresh
         console.log(
-          `[v0] [Progression] Stale session detected for ${connectionId} ` +
+          `[v0] [Progression] Stale session detected for ${connectionId}:${engineType} ` +
           `(engine_started=true but last_update=${Math.round(sessionAge / 60000)}min ago) — starting fresh.`,
         )
       }
 
       // No active unique progression (or it was cleaned by recoordinate) → start one
       const newEpoch = now
-      const newSession = await this.archiveAndStartNewProgression(connectionId, newEpoch)
+      const newSession = await this.archiveAndStartNewProgression(connectionId, newEpoch, engineType)
 
       await client.hset(key, {
         last_visited: nowIso,
@@ -1113,7 +1119,7 @@ return {
       }).catch(() => {})
 
       console.log(
-        `[v0] [Progression] Started unique progression for ${connectionId} ` +
+        `[v0] [Progression] Started unique progression for ${connectionId}:${engineType} ` +
         `(session=${newSession}, epoch=${newEpoch})`
       )
 
@@ -1121,7 +1127,7 @@ return {
     } catch (error) {
       console.error(`[v0] ensureJustUniqueProgression failed for ${connectionId}:`, error)
       const fallbackEpoch = Date.now()
-      const fallbackSession = await this.archiveAndStartNewProgression(connectionId, fallbackEpoch).catch(() => 1)
+      const fallbackSession = await this.archiveAndStartNewProgression(connectionId, fallbackEpoch, engineType).catch(() => 1)
       return { sessionNumber: fallbackSession, epoch: fallbackEpoch, wasNew: true }
     }
   }
