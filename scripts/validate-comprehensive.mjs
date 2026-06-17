@@ -7,7 +7,7 @@ const API_BASE = 'http://localhost:3002/api'
 
 function request(path, method = 'GET', body = null) {
   return new Promise((resolve, reject) => {
-    const url = new URL(path, API_BASE)
+    const url = new URL(API_BASE + (path.startsWith('/') ? path : '/' + path))
     const options = {
       hostname: url.hostname,
       port: url.port,
@@ -56,15 +56,18 @@ async function testPrehistoric() {
     }
 
     const track = trackRes.data
-    console.log(`\n[DATA] Prehistoric tracking:`)
-    console.log(`  - Base sets: ${track.base?.setsTotal || 0}`)
-    console.log(`  - Main sets: ${track.main?.setsTotal || 0}`)
-    console.log(`  - Real sets: ${track.real?.setsTotal || 0}`)
-    console.log(`  - Real progress: ${track.real?.setsProgressing || 0} progressing`)
-    console.log(`  - Avg position per set: ${track.real?.avgPosPerSet || 0}`)
 
-    // Verify continuity
-    const hasData = track.base?.setsTotal > 0 && track.main?.setsTotal > 0 && track.real?.setsTotal > 0
+    console.log(`\n[DATA] Prehistoric tracking:`)
+    console.log(`  - Base sets: ${track.breakdown?.strategies?.base || track.strategiesActive?.BTCUSDT?.base || 0}`)
+    console.log(`  - Main sets: ${track.breakdown?.strategies?.main || track.strategiesMainTotal || 0}`)
+    console.log(`  - Real sets: ${track.breakdown?.strategies?.real || track.strategiesRealTotal || 0}`)
+    console.log(`  - Real progress: ${track.activeProgressing?.strategies?.real?.sets || 0} progressing`)
+    console.log(`  - Avg position per set: ${track.realtime?.avgPosPerSet || 0}`)
+
+    const baseTotal = track.breakdown?.strategies?.base || track.strategiesActive?.BTCUSDT?.base || 0
+    const mainTotal = track.breakdown?.strategies?.main || track.strategiesMainTotal || 0
+    const realTotal = track.breakdown?.strategies?.real || track.strategiesRealTotal || 0
+    const hasData = baseTotal > 0 && mainTotal > 0 && realTotal > 0
     if (!hasData) {
       console.error('[FAIL] No data in prehistoric pipeline')
       return { passed: 0, failed: 1, skipped: 0 }
@@ -96,8 +99,8 @@ async function testRealtimeProgress() {
     const initial = state1.data
 
     console.log(`\nInitial state:`)
-    console.log(`  - Real time live cycles: ${initial.realtime?.liveRealtimeCycles || 0}`)
-    console.log(`  - Real time live count: ${initial.realtime?.realtimeLiveTotal || 0}`)
+    console.log(`  - Real time live cycles: ${initial.realtime?.realtimeCycles || initial.realtime_cycles || 0}`)
+    console.log(`  - Real time live count: ${initial.realtime?.realtimeLiveTotal || initial.liveStrategyCount || 0}`)
 
     // Wait for realtime processing
     console.log('\nWaiting 30s for realtime cycle updates...')
@@ -108,12 +111,17 @@ async function testRealtimeProgress() {
     const updated = state2.data
 
     console.log(`\nUpdated state after 30s:`)
-    console.log(`  - Real time live cycles: ${updated.realtime?.liveRealtimeCycles || 0}`)
-    console.log(`  - Real time live count: ${updated.realtime?.realtimeLiveTotal || 0}`)
+    console.log(`  - Real time live cycles: ${updated.realtime?.realtimeCycles || updated.realtime_cycles || 0}`)
+    console.log(`  - Real time live count: ${updated.realtime?.realtimeLiveTotal || updated.liveStrategyCount || 0}`)
 
     // Check progression
-    const cyclesProgressed = (updated.realtime?.liveRealtimeCycles || 0) > (initial.realtime?.liveRealtimeCycles || 0)
-    const livesProgressed = (updated.realtime?.realtimeLiveTotal || 0) > (initial.realtime?.realtimeLiveTotal || 0)
+    const initialCycles = (initial.realtime?.realtimeCycles || initial.realtime_cycles || 0)
+    const updatedCycles = (updated.realtime?.realtimeCycles || updated.realtime_cycles || 0)
+    const initialLive = (initial.realtime?.realtimeLiveTotal || initial.liveStrategyCount || 0)
+    const updatedLive = (updated.realtime?.realtimeLiveTotal || updated.liveStrategyCount || 0)
+    
+    const cyclesProgressed = updatedCycles > initialCycles
+    const livesProgressed = updatedLive > initialLive
 
     if (!cyclesProgressed && !livesProgressed) {
       console.warn('[WARN] No realtime cycle progression detected')
@@ -142,8 +150,8 @@ async function testThresholdEvaluation() {
     const track = (await request(`/connections/progression/${connId}/stats`)).data
 
     // Real sets should be <= Main sets (filtering effect)
-    const realTotal = track.real?.setsTotal || 0
-    const mainTotal = track.main?.setsTotal || 0
+    const realTotal = track.breakdown?.strategies?.real || track.strategiesRealTotal || 0
+    const mainTotal = track.breakdown?.strategies?.main || track.strategiesMainTotal || 0
 
     if (realTotal > mainTotal) {
       console.error(`[FAIL] Real sets (${realTotal}) exceed Main sets (${mainTotal})`)

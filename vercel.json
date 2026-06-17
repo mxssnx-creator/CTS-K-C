@@ -1,5 +1,5 @@
 {
-  "_deploymentNotes": "Production coordination (instrumentation.ts → completeStartup → trade-engine-auto-start self-heal for bingx-x01) is fully enabled. Higher memory (4096MB) allocated for reliable cold-start initialization and live engine coordination.",
+  "_deploymentNotes": "Production coordination (instrumentation.ts → completeStartup → trade-engine-auto-start self-heal for bingx-x01) is fully enabled. Higher memory (10240MB) allocated for reliable cold-start initialization and live engine coordination with 12 symbols.",
   "buildCommand": "bash scripts/vercel-build-setup.sh",
   "installCommand": "npm install --legacy-peer-deps",
   "env": {
@@ -28,7 +28,7 @@
   ],
   "functions": {
     "app/api/**/*.ts": {
-      "memory": 4096,
+      "memory": 10240,
       "maxDuration": 300,
       "runtime": "nodejs20.x"
     }

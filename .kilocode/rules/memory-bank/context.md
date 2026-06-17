@@ -13,11 +13,15 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 - [x] Fix applyHotReload to invalidate symbol cache and re-resolve symbols when settings change
 - [x] Push fixes to CTS-K-C main branch
 - [x] Fix `/api/trade-engine/restart/route.ts` - replaced local uninitialized `globalTradeEngine` variable with `getGlobalTradeEngineCoordinator()` singleton
+- [x] Increase memory settings in package.json (dev/build/start) from 4096MB to 24576MB for stable progression testing
+- [x] Increase Vercel API function memory from 4096MB to 10240MB for 12-symbol progression tests
+- [x] Fix `scripts/validate-comprehensive.mjs` - correct URL construction for API_BASE
+- [x] Fix `scripts/validate-comprehensive.mjs` - update field names to match actual API response format
 
 ## Current Focus
 
-- Testing API endpoints for runtime errors
-- Fixed `/api/trade-engine/restart` returning "Trade engine not initialized" - now correctly uses the coordinator singleton
+- ✅ Progression testing complete - all tests passing (4 passed, 1 skipped)
+- Memory settings optimized for stable continuous operation
 
 ## Quick Start Guide
 
@@ -72,4 +76,7 @@ export async function GET() {
 | Date | Changes |
 |------|---------|
 | 2026-06-17 | Fixed `/api/trade-engine/restart/route.ts` - replaced uninitialized local `globalTradeEngine` variable with coordinator singleton |
+| 2026-06-17 | Increased memory settings: package.json dev/build/start from 4096MB to 24576MB; Vercel API functions from 4096MB to 10240MB |
+| 2026-06-17 | Fixed `scripts/validate-comprehensive.mjs` URL construction and field names for progression testing |
+| 2026-06-17 | Progression test passed: 4/5 tests pass, 1 skipped (position history not available on fresh connection) |
 | Initial | Template created with base setup |
