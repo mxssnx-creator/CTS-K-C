@@ -22,6 +22,7 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 - [x] **Engine Type in Fingerprint**: Added `engine_type` to settings fingerprint comparison in `recoordinateForActualOne` to detect engine type changes
 - [x] **Instant Re-coordination**: Added call to `ProgressionStateManager.recoordinateForActualOne()` in `applyHotReload` to re-coordinate progression instantly after settings changes (including symbol list changes, mode flags)
 - [x] **Processor Updates**: Updated live-stage.ts, realtime-processor.ts, and config-set-processor.ts to read engine_type from trade_engine_state and use it in progression key
+- [x] **FIX: engine_type in trade_engine_state**: Added `engine_type` field to `setSettings('trade_engine_state:${connectionId}', {...})` in engine-manager.ts:604-612 - this was MISSING and caused prehistoric progression to default to "main" engine type
 
 ## Current Focus
 
