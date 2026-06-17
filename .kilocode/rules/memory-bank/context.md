@@ -12,7 +12,7 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 - [x] Add symbol_order/symbol_count/symbols to hot-reload fields
 - [x] Fix applyHotReload to invalidate symbol cache and re-resolve symbols when settings change
 - [x] Push fixes to CTS-K-C main branch
-- [x] Fix `/api/trade-engine/restart/route.ts` - replaced local uninitialized `globalTradeEngine` variable with `getGlobalTradeEngineCoordinator()` singleton
+- [x] Fix `/api/trade-engine/restart/route.ts` - replaced local uninitialized `globalTradeEngine` variable with coordinator singleton
 - [x] Increase memory settings in package.json (dev/build/start) from 4096MB to 24576MB for stable progression testing
 - [x] Increase Vercel API function memory from 4096MB to 10240MB for 12-symbol progression tests
 - [x] Fix `scripts/validate-comprehensive.mjs` - correct URL construction for API_BASE
@@ -23,6 +23,8 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 - [x] **Instant Re-coordination**: Added call to `ProgressionStateManager.recoordinateForActualOne()` in `applyHotReload` to re-coordinate progression instantly after settings changes (including symbol list changes, mode flags)
 - [x] **Processor Updates**: Updated live-stage.ts, realtime-processor.ts, and config-set-processor.ts to read engine_type from trade_engine_state and use it in progression key
 - [x] **FIX: engine_type in trade_engine_state**: Added `engine_type` field to `setSettings('trade_engine_state:${connectionId}', {...})` in engine-manager.ts:604-612 - this was MISSING and caused prehistoric progression to default to "main" engine type
+- [x] **FIX: applyHotReload symbol resolution**: Fixed wrong key names in applyHotReload - use `connection:` prefix instead of `connection_settings:`, and don't double-prefix with `settings:` when calling getSettings
+- [x] **FIX: prehistoric progression startup**: Added immediate `setTimeout(tick, 0)` call in `startPrehistoricProgression` so the loop starts right away instead of waiting for the first scheduleNext
 
 ## Current Focus
 
