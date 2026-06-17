@@ -443,9 +443,12 @@ private engineManagers: Map<string, TradeEngineManager> = new Map()
         )
         return
       }
-      const settings = await loadSettingsAsync()
+const settings = await loadSettingsAsync()
+      const connectionState = (await (await import("@/lib/redis-db")).getSettings(`trade_engine_state:${connection.id}`)) || {}
       const config: EngineConfig = {
-        connectionId,
+        connectionId: connection.id,
+        exchange: connection.exchange,
+        engine_type: (connectionState as any)?.engine_type || "main",
         indicationInterval: settings.mainEngineIntervalMs ? settings.mainEngineIntervalMs / 1000 : 5,
         strategyInterval: settings.strategyUpdateIntervalMs ? settings.strategyUpdateIntervalMs / 1000 : 10,
         realtimeInterval: settings.realtimeIntervalMs ? settings.realtimeIntervalMs / 1000 : 0.3,
