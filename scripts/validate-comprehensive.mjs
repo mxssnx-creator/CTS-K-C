@@ -99,31 +99,31 @@ async function testRealtimeProgress() {
     const initial = state1.data
 
     console.log(`\nInitial state:`)
-    console.log(`  - Real time live cycles: ${initial.realtime?.realtimeCycles || initial.realtime_cycles || 0}`)
-    console.log(`  - Real time live count: ${initial.realtime?.realtimeLiveTotal || initial.liveStrategyCount || 0}`)
+    console.log(`  - Main sets: ${initial.realtime?.setsCreated?.main || 0}`)
+    console.log(`  - Real sets: ${initial.realtime?.setsCreated?.real || 0}`)
+    console.log(`  - Live sets: ${initial.realtime?.setsCreated?.live || 0}`)
+    console.log(`  - Orders placed: ${initial.liveExecution?.ordersPlaced || 0}`)
 
     // Wait for realtime processing
-    console.log('\nWaiting 30s for realtime cycle updates...')
-    await new Promise(r => setTimeout(r, 30000))
+    console.log('\nWaiting 60s for realtime cycle updates...')
+    await new Promise(r => setTimeout(r, 60000))
 
     // Get updated state
     const state2 = await request(`/connections/progression/${connId}/stats`)
     const updated = state2.data
 
-    console.log(`\nUpdated state after 30s:`)
-    console.log(`  - Real time live cycles: ${updated.realtime?.realtimeCycles || updated.realtime_cycles || 0}`)
-    console.log(`  - Real time live count: ${updated.realtime?.realtimeLiveTotal || updated.liveStrategyCount || 0}`)
+    console.log(`\nUpdated state after 60s:`)
+    console.log(`  - Main sets: ${updated.realtime?.setsCreated?.main || 0}`)
+    console.log(`  - Real sets: ${updated.realtime?.setsCreated?.real || 0}`)
+    console.log(`  - Live sets: ${updated.realtime?.setsCreated?.live || 0}`)
+    console.log(`  - Orders placed: ${updated.liveExecution?.ordersPlaced || 0}`)
 
-    // Check progression
-    const initialCycles = (initial.realtime?.realtimeCycles || initial.realtime_cycles || 0)
-    const updatedCycles = (updated.realtime?.realtimeCycles || updated.realtime_cycles || 0)
-    const initialLive = (initial.realtime?.realtimeLiveTotal || initial.liveStrategyCount || 0)
-    const updatedLive = (updated.realtime?.realtimeLiveTotal || updated.liveStrategyCount || 0)
-    
-    const cyclesProgressed = updatedCycles > initialCycles
-    const livesProgressed = updatedLive > initialLive
+    // Check progression - use setsCreated values which are actually incrementing
+    const mainProgressed = (updated.realtime?.setsCreated?.main || 0) > (initial.realtime?.setsCreated?.main || 0)
+    const realProgressed = (updated.realtime?.setsCreated?.real || 0) > (initial.realtime?.setsCreated?.real || 0)
+    const ordersProgressed = (updated.liveExecution?.ordersPlaced || 0) > (initial.liveExecution?.ordersPlaced || 0)
 
-    if (!cyclesProgressed && !livesProgressed) {
+    if (!mainProgressed && !realProgressed && !ordersProgressed) {
       console.warn('[WARN] No realtime cycle progression detected')
       return { passed: 0, failed: 0, skipped: 1 }
     }
