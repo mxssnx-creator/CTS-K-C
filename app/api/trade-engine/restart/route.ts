@@ -1,14 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-
-let globalTradeEngine: any = null
-
-export function setGlobalTradeEngine(engine: any) {
-  globalTradeEngine = engine
-}
+import { getGlobalTradeEngineCoordinator } from "@/lib/trade-engine"
 
 export async function POST(request: NextRequest) {
   try {
-    if (!globalTradeEngine) {
+    const coordinator = getGlobalTradeEngineCoordinator()
+    if (!coordinator) {
       return NextResponse.json({ success: false, error: "Trade engine not initialized" }, { status: 503 })
     }
 
@@ -27,8 +23,8 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Restarting trade engine...", { force, clearCache })
 
-    // Stop the engine first
-    await globalTradeEngine.stop()
+    // Stop all engines first
+    await coordinator.stopAll()
 
     // Optional: Clear cache if requested
     if (clearCache) {
@@ -39,8 +35,8 @@ export async function POST(request: NextRequest) {
     // Wait a moment before restart
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
-    // Start the engine again
-    await globalTradeEngine.start()
+    // Start all engines again
+    await coordinator.startAll()
 
     console.log("[v0] Trade engine restarted successfully")
 

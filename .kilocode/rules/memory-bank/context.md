@@ -12,23 +12,12 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 - [x] Add symbol_order/symbol_count/symbols to hot-reload fields
 - [x] Fix applyHotReload to invalidate symbol cache and re-resolve symbols when settings change
 - [x] Push fixes to CTS-K-C main branch
-
-## Current Structure
-
-| File/Directory | Purpose | Status |
-|----------------|---------|--------|
-| `src/app/page.tsx` | Home page | ✅ Ready |
-| `src/app/layout.tsx` | Root layout | ✅ Ready |
-| `src/app/globals.css` | Global styles | ✅ Ready |
-| `.kilocode/` | AI context & recipes | ✅ Ready |
+- [x] Fix `/api/trade-engine/restart/route.ts` - replaced local uninitialized `globalTradeEngine` variable with `getGlobalTradeEngineCoordinator()` singleton
 
 ## Current Focus
 
-The template is ready. Next steps depend on user requirements:
-
-1. What type of application to build
-2. What features are needed
-3. Design/branding preferences
+- Testing API endpoints for runtime errors
+- Fixed `/api/trade-engine/restart` returning "Trade engine not initialized" - now correctly uses the coordinator singleton
 
 ## Quick Start Guide
 
@@ -82,4 +71,5 @@ export async function GET() {
 
 | Date | Changes |
 |------|---------|
+| 2026-06-17 | Fixed `/api/trade-engine/restart/route.ts` - replaced uninitialized local `globalTradeEngine` variable with coordinator singleton |
 | Initial | Template created with base setup |
