@@ -98,6 +98,8 @@ export async function GET() {
 
 | Date | Changes |
 |------|---------|
+| 2026-07-01 | **PRODUCTION MODE FIX COMPLETE**: Fixed connection seeding, coordinator initialization, and auto-start flow - engines now start automatically in production |
+| 2026-07-01 | Verified engine progression probe: prehistoric 100% complete, strategy sets being created, engine running stably |
 | 2026-07-01 | Fixed ESLint config: added eslint-plugin-react-hooks plugin, enabled react-hooks/rules-of-hooks and exhaustive-deps rules; Removed invalid eslint-disable comments for non-existent @typescript-eslint/no-unreachable-code-error rule |
 | 2026-06-17 | Fixed `/api/trade-engine/restart/route.ts` - replaced uninitialized local `globalTradeEngine` variable with coordinator singleton |
 | 2026-06-17 | Increased memory settings: package.json dev/build/start from 4096MB to 24576MB; Vercel API functions from 4096MB to 10240MB |
