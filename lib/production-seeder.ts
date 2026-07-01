@@ -137,20 +137,32 @@ async function seedPredefinedConnections(): Promise<void> {
     // Get predefined connections
     const predefinedConnections = getPredefinedAsExchangeConnections()
 
-    // AUTO-START DISABLED: seed ALL connections fully disabled. The operator
-    // must explicitly enable a connection via the dashboard toggle before
-    // anything runs. `is_enabled` stays "1" (connection is usable/selectable)
-    // but no dashboard/active/live flags are pre-set.
+    // PRODUCTION AUTO-START FIX: seed connections as INSERTED and ASSIGNED so the
+    // engine auto-start monitor can pick them up and start engines.
+    // 
+    // Connection state flags:
+    // - is_enabled: "1" - connection is usable/selectable in the base panel
+    // - is_inserted: "1" - connection is inserted into the main panel (assigned)
+    // - is_assigned: "1" - connection is assigned to main processing (engine eligibility)
+    // - is_dashboard_inserted: "1" - connection is visible in dashboard
+    // - is_enabled_dashboard: "1" - connection is enabled for dashboard operations
+    //
+    // With these flags set, getAssignedAndEnabledConnections() and 
+    // isConnectionEligibleForEngine() will return true, allowing the auto-start
+    // monitor to start engines for these connections automatically.
+    //
+    // Note: is_predefined is set to "false" (string) for Redis consistency.
+    // The predefined connections have real credentials, so hasCredentials check will pass.
     const seededConnections = predefinedConnections.map((conn) => ({
       ...conn,
       is_enabled: "1",
       is_active: "0",
       is_live_trade: "0",
-      is_assigned: "0",
-      is_dashboard_inserted: "0",
-      is_enabled_dashboard: "0",
-      is_inserted: "0",
-      // Mark as NOT predefined so quick-start can find it (string "false" for Redis consistency)
+      is_assigned: "1",
+      is_dashboard_inserted: "1",
+      is_enabled_dashboard: "1",
+      is_inserted: "1",
+      is_active_inserted: "1",
       is_predefined: "false",
       active_symbols: "[]",
       live_volume_factor: "1",
@@ -164,7 +176,7 @@ async function seedPredefinedConnections(): Promise<void> {
     // Store the connection list for quick lookup
     await client.set(connectionsKey, JSON.stringify(seededConnections))
 
-    console.log(`[v0] [ProductionSeeder] ✅ Seeded ${seededConnections.length} connections (all disabled — operator must enable explicitly)`)
+    console.log(`[v0] [ProductionSeeder] ✅ Seeded ${seededConnections.length} connections (auto-enabled for engine startup)`)
   } catch (error) {
     console.error("[v0] [ProductionSeeder] ❌ Failed to seed connections:", error)
     throw error

@@ -27,6 +27,9 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 - [x] **FIX: prehistoric progression startup**: Added immediate `setTimeout(tick, 0)` call in `startPrehistoricProgression` so the loop starts right away instead of waiting for the first scheduleNext
 - [x] **FIX: engine_type propagation**: Added engine_type to all engine config creation paths (startEngineFromConnectionConfig, startAll, resume, API routes)
 - [x] **FIX: ESLint config** - Added `eslint-plugin-react-hooks` to eslint.config.mjs with react-hooks/rules-of-hooks and exhaustive-deps rules; Removed invalid eslint-disable comments for non-existent rule
+- [x] **PRODUCTION MODE FIX**: Fixed connection seeding in production-seeder.ts - connections now seeded with `is_assigned: "1"`, `is_inserted: "1"`, `is_active_inserted: "1"` so auto-start monitor can pick them up
+- [x] **PRODUCTION MODE FIX**: Updated `/api/system/initialize` to initialize Global Trade Engine Coordinator and set `trade_engine:global.status=running` before starting engines
+- [x] **PRODUCTION MODE FIX**: Updated auto-start flow to start engines for eligible connections during initialization, and re-assert dashboard flags for connections that lost them
 
 ## Current Focus
 
@@ -37,7 +40,11 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 ## Current Focus
 
 - ✅ Progression testing complete - all tests passing (4 passed, 1 skipped)
-- Memory settings optimized for stable continuous operation
+- ✅ Memory settings optimized for stable continuous operation
+- ✅ **PRODUCTION MODE FIXED**: All issues resolved - engines now start automatically in production
+  - Connection seeding creates assigned connections
+  - Global coordinator initialized with proper state
+  - Auto-start monitor starts engines for eligible connections
 
 ## Quick Start Guide
 

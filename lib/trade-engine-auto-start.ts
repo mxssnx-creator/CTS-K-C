@@ -8,7 +8,7 @@
  */
 
 import { getGlobalTradeEngineCoordinator } from "./trade-engine"
-import { getAllConnections, getRedisClient, initRedis } from "./redis-db"
+import { getAllConnections, getRedisClient, initRedis, updateConnection } from "./redis-db"
 import { loadSettingsAsync } from "./settings-storage"
 import { isConnectionEligibleForEngine, isTruthyFlag } from "./connection-state-utils"
 
@@ -54,6 +54,9 @@ export async function initializeTradeEngineAutoStart(): Promise<void> {
       return
     }
     
+    // Start engines for assigned+enabled connections
+    await startEnginesForEligibleConnections()
+    
     console.log("[v0] [Auto-Start] Monitoring initialized - enabled connections will be synchronized")
     autoStartInitialized = true
     startConnectionMonitoring()
@@ -61,6 +64,30 @@ export async function initializeTradeEngineAutoStart(): Promise<void> {
     console.error("[v0] [Auto-Start] Initialization failed:", error)
     autoStartInitialized = true
     startConnectionMonitoring()
+  }
+}
+
+/**
+ * Start engines for all connections that are eligible (assigned + enabled).
+ * Called during initialization to ensure engines are running.
+ */
+async function startEnginesForEligibleConnections(): Promise<void> {
+  try {
+    await initRedis()
+    const connections = await getAllConnections()
+    if (!Array.isArray(connections)) {
+      console.warn("[v0] [Auto-Start] Connections not array, skipping engine start")
+      return
+    }
+    
+    const eligibleConnections = connections.filter((c) => isConnectionEligibleForEngine(c))
+    console.log(`[v0] [Auto-Start] Found ${eligibleConnections.length} eligible connections out of ${connections.length}`)
+    
+    const coordinator = getGlobalTradeEngineCoordinator()
+    const startedCount = await coordinator.startMissingEngines(eligibleConnections)
+    console.log(`[v0] [Auto-Start] Started ${startedCount} engines for eligible connections`)
+  } catch (error) {
+    console.error("[v0] [Auto-Start] Failed to start engines for eligible connections:", error)
   }
 }
 
@@ -128,31 +155,62 @@ export async function initializeTradeEngineAutoStart(): Promise<void> {
         }
 
         if (currentStatus !== "running") {
-          // AUTO-START DISABLED: never auto-resurrect the global engine.
-          // Only the operator's explicit Start action (via dashboard / QuickStart)
-          // may set trade_engine:global status=running. The monitor just skips
-          // its sweep and waits for the next tick.
-          if (isStartup) {
+          // AUTO-START: If global status is not explicitly set, check if coordinator
+          // is initialized and start engines. This enables automatic startup without
+          // requiring an explicit "Start" action from the operator.
+          // The monitor will start engines for all eligible connections.
+          if (isStartup && currentStatus === "") {
             console.log(
-              `[v0] [AutoStart] Startup sweep skipped: global engine not running (status="${currentStatus || "empty"}"). ` +
-              "Engine will start only when operator clicks Start.",
+              `[v0] [AutoStart] Startup: global status empty, starting engines for eligible connections`,
             )
+          } else if (currentStatus === "stopped" || currentStatus === "paused") {
+            if (isStartup) {
+              console.log(
+                `[v0] [AutoStart] Startup sweep skipped: global status="${currentStatus}". ` +
+                "Engine will start when operator clicks Start.",
+              )
+            }
+            return
           }
-          return
         }
 
-        // ── Idempotent base-connection activation (DISABLED) ─────────────���─────
-        // AUTO-START DISABLED: Connections no longer auto-enable on boot.
-        // Users must explicitly enable connections via the dashboard toggle.
-        // This allows starting without immediately running all engines.
-        //
-        // REMOVED: code that was setting is_enabled_dashboard="1" automatically.
-        // The healing sweep will now skip this activation block entirely.
-
+        // Get connections for this sweep
         const connections = await getAllConnections()
         if (!Array.isArray(connections)) {
           console.warn("[v0] [AutoStart] Connections not array, skipping sweep")
           return
+        }
+
+        // ── Idempotent base-connection activation ─────────────────────────────────
+        // PRODUCTION AUTO-START FIX: Re-assert dashboard flags for connections
+        // that lost them (migration race, clear-progressions partial run, etc.).
+        // This ensures the healing sweep can restart engines even after a
+        // snapshot restore or redeploy that zeroed the flags.
+        //
+        // Only update connections that have credentials or are testnet/demo/predefined.
+        for (const c of connections) {
+          const needsActivation =
+            !isTruthyFlag(c.is_dashboard_inserted) ||
+            !isTruthyFlag(c.is_enabled_dashboard) ||
+            !isTruthyFlag(c.is_active_inserted)
+          if (!needsActivation) continue
+          
+          const hasCreds = c.api_key && c.api_secret && c.api_key.length >= 10 && c.api_secret.length >= 10
+          const isTestnet = isTruthyFlag(c.is_testnet)
+          const isDemo = isTruthyFlag(c.demo_mode)
+          const isPredefined = isTruthyFlag(c.is_predefined)
+          
+          if (hasCreds || isTestnet || isDemo || isPredefined) {
+            try {
+              await updateConnection(c.id, {
+                is_dashboard_inserted: "1",
+                is_enabled_dashboard: "1",
+                is_active_inserted: "1",
+                is_assigned: "1",
+                is_inserted: "1",
+              }).catch(() => {})
+            } catch { /* best-effort */ }
+          }
         }
 
         // Use isConnectionEligibleForEngine which checks is_active_inserted but

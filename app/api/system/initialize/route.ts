@@ -9,6 +9,24 @@ export async function POST(req: NextRequest) {
   try {
     const { seedProductionData } = await import("@/lib/production-seeder")
     await seedProductionData({ seedSettings: true, seedConnections: true, seedMarketData: true, seedProgression: true })
+    
+    // Initialize the Global Trade Engine Coordinator
+    const { getGlobalTradeEngineCoordinator, initializeGlobalCoordinator } = await import("@/lib/trade-engine")
+    const coordinator = initializeGlobalCoordinator()
+    
+    // Set global state to running so auto-start monitor picks it up
+    const { getRedisClient, initRedis, setSettings } = await import("@/lib/redis-db")
+    await initRedis()
+    const client = getRedisClient()
+    await setSettings("trade_engine:global", {
+      status: "running",
+      started_at: new Date().toISOString(),
+      version: "5.2.0",
+    })
+    
+    // Start coordinator to begin processing
+    await coordinator.startAll()
+    
     // Start coordinator
     await fetch("/api/trade-engine/auto-start", { method: "POST", cache: "no-store" }).catch(() => {})
     return NextResponse.json({ success: true })
