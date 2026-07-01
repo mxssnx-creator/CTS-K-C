@@ -26,6 +26,7 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 - [x] **FIX: applyHotReload symbol resolution**: Fixed wrong key names in applyHotReload - use `connection:` prefix instead of `connection_settings:`, and don't double-prefix with `settings:` when calling getSettings
 - [x] **FIX: prehistoric progression startup**: Added immediate `setTimeout(tick, 0)` call in `startPrehistoricProgression` so the loop starts right away instead of waiting for the first scheduleNext
 - [x] **FIX: engine_type propagation**: Added engine_type to all engine config creation paths (startEngineFromConnectionConfig, startAll, resume, API routes)
+- [x] **FIX: ESLint config** - Added `eslint-plugin-react-hooks` to eslint.config.mjs with react-hooks/rules-of-hooks and exhaustive-deps rules; Removed invalid eslint-disable comments for non-existent rule
 
 ## Current Focus
 
@@ -90,6 +91,7 @@ export async function GET() {
 
 | Date | Changes |
 |------|---------|
+| 2026-07-01 | Fixed ESLint config: added eslint-plugin-react-hooks plugin, enabled react-hooks/rules-of-hooks and exhaustive-deps rules; Removed invalid eslint-disable comments for non-existent @typescript-eslint/no-unreachable-code-error rule |
 | 2026-06-17 | Fixed `/api/trade-engine/restart/route.ts` - replaced uninitialized local `globalTradeEngine` variable with coordinator singleton |
 | 2026-06-17 | Increased memory settings: package.json dev/build/start from 4096MB to 24576MB; Vercel API functions from 4096MB to 10240MB |
 | 2026-06-17 | Fixed `scripts/validate-comprehensive.mjs` URL construction and field names for progression testing |
