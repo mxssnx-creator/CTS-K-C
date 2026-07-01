@@ -2182,7 +2182,6 @@ export class TradeEngineManager {
     return
     // The original loop body below is unreachable — preserved only as
     // a reference for the legacy behaviour. Safe to delete in a follow-up.
-    // eslint-disable-next-line @typescript-eslint/no-unreachable-code-error
     let cycleCount = 0
     let totalDuration = 0
     let errorCount = 0
@@ -2703,7 +2702,6 @@ export class TradeEngineManager {
     }
     return
     // ── Legacy body preserved as unreachable reference ───────────────────
-    // eslint-disable-next-line @typescript-eslint/no-unreachable-code-error
     let cycleCount_legacy = 0
     void cycleCount_legacy
     let cycleCount2 = 0
