@@ -24,3 +24,6 @@ yarn-error.log*
 
 # Runtime in-memory Redis snapshot (ephemeral, not source)
 .v0-data/
+
+# Parallel dev/prod build dirs (NEXT_DIST_DIR)
+.next-*/

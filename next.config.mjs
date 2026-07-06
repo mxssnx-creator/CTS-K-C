@@ -1,6 +1,12 @@
 // Migration 025 deadlock fix applied — forces full server restart
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Allow separate build/output directories so a `next dev` instance and a
+  // `next start` (production) instance can run in parallel from the same repo
+  // without clobbering each other's `.next` artifacts (which previously
+  // corrupted the running production server and made it hang). Set via the
+  // NEXT_DIST_DIR env var; defaults to ".next" when unset.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: false,
   typescript: {
     ignoreBuildErrors: true,
