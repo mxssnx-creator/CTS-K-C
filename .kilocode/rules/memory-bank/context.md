@@ -8,6 +8,14 @@ Complete trading system with exchange connectors (BingX, Binance, Bybit, OKX, Pi
 
 ## Recently Completed
 
+- [x] **PRODUCTION MODE ROOT-CAUSE FIX (2026-07-06)**: Resolved dev-works/prod-fails (coordinator errors, progression failures, crashes, 503s):
+  - Migration deadlock: `ensureUniqueSiteInstance()` called `initRedis()` re-entrantly inside `initRedis -> runMigrations -> ensureCompleteProductionCoverage` (prod-only path). Now uses `ensureCoreRedis()`. Primary prod deadlock.
+  - Stale snapshot: prod persisted `.v0-data/redis-snapshot.json`; on restart it restored a previous (dead) process's runtime state. Added per-process `bootSessionId` stamped into snapshots; mismatched/legacy snapshots are discarded so prod boots fresh like dev.
+  - Startup coordinator (`completeStartup()` — orphaned-flag cleanup + stranded-position reconciliation) was defined but never invoked. Now wired into `instrumentation.register()`.
+  - Floating `Promise.race` timeouts crashed the process ~15-35s after boot; swallowed via `.catch()` in initRedis, runMigrations, completeStartup.
+  - Memory health check used `heapUsed/heapTotal` (V8 reservation, not the real ceiling) → false "unhealthy" → `/api/health` + readiness returned 503 → orchestrator restart loops. Now measured against the actual `max-old-space-size` ceiling.
+  - Verified: prod build + `next start` boots healthy, all pages 200, `/api/connections` seeded (bingx-x01 enabled, 10 connections), `typecheck` + `lint` pass. Pushed to main (8c93882).
+
 - [x] Fix missing escalateEngines property in GlobalTradeEngineCoordinator
 - [x] Add symbol_order/symbol_count/symbols to hot-reload fields
 - [x] Fix applyHotReload to invalidate symbol cache and re-resolve symbols when settings change
@@ -98,6 +106,7 @@ export async function GET() {
 
 | Date | Changes |
 |------|---------|
+| 2026-07-06 | **PRODUCTION MODE ROOT-CAUSE FIX**: deadlock in migrations (ensureUniqueSiteInstance re-entrancy), stale snapshot restore, unused startup coordinator, floating Promise.race crashes, false 503 from memory check. All fixed, verified, pushed (8c93882) |
 | 2026-07-01 | **PRODUCTION MODE FIX COMPLETE**: Fixed connection seeding, coordinator initialization, and auto-start flow - engines now start automatically in production |
 | 2026-07-01 | Verified engine progression probe: prehistoric 100% complete, strategy sets being created, engine running stably |
 | 2026-07-01 | Fixed ESLint config: added eslint-plugin-react-hooks plugin, enabled react-hooks/rules-of-hooks and exhaustive-deps rules; Removed invalid eslint-disable comments for non-existent @typescript-eslint/no-unreachable-code-error rule |
