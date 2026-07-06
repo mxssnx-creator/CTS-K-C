@@ -178,10 +178,13 @@ export async function completeStartup() {
     console.log(`[v0] [Startup] Step 5/8: Consolidating database structures (background, 15s deadline)...`)
     try {
       const DEADLINE_MS = 15_000
-      await Promise.race([
-        consolidateDatabase(),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("consolidation deadline exceeded")), DEADLINE_MS)),
-      ])
+      // NOTE: the timeout promise is explicitly swallowed with .catch() so that,
+      // when consolidation wins the race, the still-pending timer does not reject
+      // into an UNHANDLED rejection (which crashes the Node process a few seconds
+      // after boot). The winner's result is what we await; the loser must be handled.
+      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("consolidation deadline exceeded")), DEADLINE_MS))
+      timeout.catch(() => {})
+      await Promise.race([consolidateDatabase(), timeout])
       console.log(`[v0] [Startup] ✓ Database consolidation complete\n`)
     } catch (e) {
       console.warn(`[v0] [Startup] ⚠ Database consolidation did not finish: ${e instanceof Error ? e.message : String(e)}`)

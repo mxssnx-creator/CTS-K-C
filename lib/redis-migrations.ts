@@ -3169,15 +3169,16 @@ async function runMigrationsInternal(): Promise<{ success: boolean; message: str
     for (const migration of pendingMigrations) {
       try {
         console.log(`[v0] [Migrations] Running: ${migration.name} (v${migration.version})`)
-        await Promise.race([
-          migration.up(client),
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error(`Migration ${migration.name} exceeded ${MIGRATION_DEADLINE_MS}ms deadline`)),
-              MIGRATION_DEADLINE_MS,
-            ),
+        const migStepTimeout = new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`Migration ${migration.name} exceeded ${MIGRATION_DEADLINE_MS}ms deadline`)),
+            MIGRATION_DEADLINE_MS,
           ),
-        ])
+        )
+        // Swallow the timeout's rejection so a finished migration doesn't leave a
+        // floating rejecting promise (unhandled rejection → process crash).
+        migStepTimeout.catch(() => {})
+        await Promise.race([migration.up(client), migStepTimeout])
         console.log(`[v0] [Migrations] ✓ Completed: ${migration.name}`)
       } catch (error) {
         console.error(`[v0] [Migrations] ✗ Failed during ${migration.name}:`, error)

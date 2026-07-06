@@ -159,6 +159,22 @@ export class HealthCheckService {
   }
 
   /**
+   * Resolve the real V8 old-space ceiling in MB (defaults to Node's 4096 MB).
+   * `process.memoryUsage().heapTotal` is only the *currently reserved* heap,
+   * which V8 grows lazily toward this ceiling — so comparing heapUsed against
+   * heapTotal is misleading and flips the system to UNHEALTHY on cold start.
+   */
+  private resolveMaxOldSpaceMb(): number {
+    const DEFAULT = 4096
+    try {
+      const args = [...(process.execArgv || []), process.env.NODE_OPTIONS || ""].join(" ")
+      const m = args.match(/--max-old-space-size=(\d+)/)
+      if (m && Number(m[1]) > 0) return Number(m[1])
+    } catch { /* ignore */ }
+    return DEFAULT
+  }
+
+  /**
    * Check memory usage
    */
   private async checkMemory(): Promise<ComponentHealth> {
@@ -166,12 +182,15 @@ export class HealthCheckService {
 
     try {
       const memUsage = process.memoryUsage()
-      const heapUsedPercent = (memUsage.heapUsed / memUsage.heapTotal) * 100
+      // Compare against the REAL ceiling (max-old-space-size), not heapTotal.
+      const maxOldSpaceMb = this.resolveMaxOldSpaceMb()
+      const heapUsedMb = memUsage.heapUsed / 1024 / 1024
+      const heapUsedPercent = (heapUsedMb / maxOldSpaceMb) * 100
 
       let status = HealthStatus.HEALTHY
 
-      // Warn if heap usage is above 80%
-      if (heapUsedPercent > 90) {
+      // Only flag unhealthy when we are genuinely close to the OOM ceiling.
+      if (heapUsedPercent > 92) {
         status = HealthStatus.UNHEALTHY
       } else if (heapUsedPercent > 80) {
         status = HealthStatus.DEGRADED
@@ -181,8 +200,8 @@ export class HealthCheckService {
         status,
         responseTime: Date.now() - startTime,
         lastCheck: new Date(),
-        error: status !== HealthStatus.HEALTHY 
-          ? `High memory usage: ${heapUsedPercent.toFixed(1)}%`
+        error: status !== HealthStatus.HEALTHY
+          ? `High memory usage: ${heapUsedPercent.toFixed(1)}% of ${maxOldSpaceMb}MB ceiling`
           : undefined
       }
     } catch (error) {

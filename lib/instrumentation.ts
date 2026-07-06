@@ -11,10 +11,25 @@ export async function register() {
   console.log("[v0] Instrumentation registered")
   
   try {
-    await initRedis()
-    console.log("[v0] Redis initialized via instrumentation")
+    // Run the full startup sequence. This initialises Redis, applies
+    // migrations, and — critically — runs the startup coordinator's
+    // orphaned-flag cleanup and stranded-position reconciliation. Those
+    // steps used to live in `completeStartup()` which was defined but
+    // never invoked, so stale `engine_is_running` flags / dead progression
+    // from an unclean shutdown were never cleared. Running it on every
+    // boot (dev AND prod) keeps production behaviour consistent with dev.
+    const { completeStartup } = await import("@/lib/startup-coordinator")
+    await completeStartup()
+    console.log("[v0] Redis initialized + startup sequence complete via instrumentation")
   } catch (e) {
-    console.warn("[v0] Redis init failed in instrumentation:", e)
+    // Never let startup coordination block the server from coming up.
+    console.warn("[v0] Startup sequence failed in instrumentation (continuing):", e)
+    try {
+      await initRedis()
+      console.log("[v0] Redis initialized via instrumentation (fallback)")
+    } catch (e2) {
+      console.warn("[v0] Redis init failed in instrumentation:", e2)
+    }
   }
 }
 

@@ -51,6 +51,17 @@ const globalForRedis = globalThis as unknown as {
   // Next.js dev route modules (which re-evaluate and get isConnected=false) to
   // see the real connected state without re-running initRedis/migrations.
   __redis_fully_connected?: boolean
+  // Unique, per-process boot session id. Stamped into every on-disk snapshot
+  // so that, on the next cold boot (a brand-new process), we can detect that
+  // the snapshot on disk belongs to a PREVIOUS, now-dead process and MUST be
+  // discarded instead of restored. This is what makes production boot behave
+  // identically to development (which never writes a snapshot): a fresh
+  // process always starts from empty memory + migrations, so it can never
+  // resurrect stale `engine_is_running=1` flags, orphaned progression, or
+  // half-written coordinator state from a prior run. Without this gate,
+  // production would load that stale state and report phantom "running"
+  // engines that never progress — exactly the dev-works/prod-doesn't bug.
+  __boot_session_id?: string
 }
 
 export class InlineLocalRedis {
@@ -82,6 +93,15 @@ export class InlineLocalRedis {
     // Ensure ttl map exists for older data structures
     if (!globalForRedis.__redis_data.ttl) {
       globalForRedis.__redis_data.ttl = new Map()
+    }
+
+    // Mint a per-process boot session id ONCE. It is stored on globalThis so
+    // it survives Next.js hot-reloads within the same process (and therefore
+    // a snapshot written during this process is considered "current"), but a
+    // fresh `next start` (or container restart) gets a brand-new id, which in
+    // loadFromDisk() invalidates any on-disk snapshot from a prior process.
+    if (!globalForRedis.__boot_session_id && typeof process !== "undefined" && process.versions?.node) {
+      globalForRedis.__boot_session_id = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`
     }
     
     this.data = globalForRedis.__redis_data
@@ -174,6 +194,7 @@ export class InlineLocalRedis {
     const d = this.data
     return JSON.stringify({
       v: 1,
+      bootSessionId: globalForRedis.__boot_session_id ?? "",
       savedAt: Date.now(),
       strings: Array.from(d.strings.entries()),
       hashes: Array.from(d.hashes.entries()),
@@ -245,6 +266,25 @@ export class InlineLocalRedis {
       try {
         const raw = await fs.readFile(c.file, "utf8")
         const parsed = JSON.parse(raw)
+        // ── Stale-snapshot guard (root cause of dev-works/prod-doesn't) ──
+        // A snapshot written by a PREVIOUS process (different
+        // __boot_session_id) carries runtime state — `engine_is_running=1`
+        // flags, progression counters, coordinator state — for engines that
+        // no longer exist. Restoring it makes the coordinator report phantom
+        // "running" engines that never progress, and produces inconsistent
+        // results versus development (which never persists a snapshot).
+        // Discard such snapshots and start fresh; migrations + seeding
+        // rebuild the canonical state deterministically.
+        const expectedSession = globalForRedis.__boot_session_id
+        if (expectedSession && parsed.bootSessionId !== expectedSession) {
+          console.warn(
+            `[v0] [Redis Persistence] Discarding snapshot from a previous process session ` +
+            `(${parsed.bootSessionId || "legacy"} != ${expectedSession}) — starting fresh to avoid stale runtime state`,
+          )
+          // Quarantine so we don't keep re-reading the dead snapshot.
+          try { await fs.rename(c.file, `${c.file}.stale-${Date.now()}`) } catch {}
+          continue
+        }
         if (this.applySnapshot(parsed)) {
           const keys =
             this.data.strings.size + this.data.hashes.size + this.data.sets.size +
@@ -1677,15 +1717,16 @@ export async function initRedis(): Promise<void> {
       const { runMigrations, resetMigrationRunState } = await import("@/lib/redis-migrations")
       const MIGRATIONS_DEADLINE_MS = 35_000
       try {
-        await Promise.race([
-          runMigrations(),
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error(`runMigrations() exceeded ${MIGRATIONS_DEADLINE_MS}ms global deadline — aborting to keep server responsive`)),
-              MIGRATIONS_DEADLINE_MS,
-            ),
+        const migTimeout = new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`runMigrations() exceeded ${MIGRATIONS_DEADLINE_MS}ms global deadline — aborting to keep server responsive`)),
+            MIGRATIONS_DEADLINE_MS,
           ),
-        ])
+        )
+        // Swallow the timeout's rejection so a settled migration promise doesn't
+        // leave a floating rejecting promise (unhandled rejection → process crash).
+        migTimeout.catch(() => {})
+        await Promise.race([runMigrations(), migTimeout])
         migrationsRan = true
       } catch (migErr) {
         console.error("[v0] [Redis] runMigrations deadline/error:", migErr instanceof Error ? migErr.message : migErr)
@@ -2628,7 +2669,15 @@ export function isProductionEnvironment(): boolean {
 const GLOBAL_SITE_INSTANCE_KEY = "site:unique_instance"
 
 export async function ensureUniqueSiteInstance(): Promise<{ siteSessionId: string; isNew: boolean }> {
-  await initRedis()
+  // IMPORTANT: use ensureCoreRedis(), NOT initRedis(). This function is called
+  // from inside the migration path (ensureCompleteProductionCoverage → here)
+  // which itself runs within initRedis()'s in-flight promise. Calling
+  // initRedis() would return that same in-flight promise and `await` it,
+  // deadlocking the entire startup until the migration global deadline fires
+  // (35s) — which only happens in PRODUCTION (the coverage pass is prod-only),
+  // perfectly matching the "dev works / prod deadlocks" symptom. ensureCoreRedis
+  // brings the client up without re-entering the migration guard, so no cycle.
+  await ensureCoreRedis()
   const client = getRedisClient()
   if (!client) {
     return { siteSessionId: "fallback-" + Date.now(), isNew: true }
